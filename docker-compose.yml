@@ -1,0 +1,81 @@
+version: "3.9"
+
+services:
+  # 1. Frontend Service (Port 8000)
+  frontend:
+    build: ./frontend
+    container_name: uts_frontend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
+    networks:
+      - uts_network
+
+  # 2. Backend API Service (Port 8080)
+  backend:
+    build: ./backend
+    container_name: uts_backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - minio
+    networks:
+      - uts_network
+
+  # 3. Database PostgreSQL (Port 5432)
+  postgres:
+    image: postgres:15-alpine
+    container_name: uts_postgres
+    environment:
+      POSTGRES_DB: utsdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - uts_network
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  # 4. Storage MinIO (Port 9000 & 9001)
+  minio:
+    image: minio/minio
+    container_name: uts_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - uts_network
+    volumes:
+      - minio_data:/data
+
+  # 5. MinIO Setup (Otomatis buatin wadah penyimpanan/bucket foto)
+  minio-setup:
+    image: minio/mc
+    container_name: uts_minio_setup
+    depends_on:
+      - minio
+    networks:
+      - uts_network
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/photos || true;
+      mc anonymous set public myminio/photos;
+      exit 0;
+      "
+
+networks:
+  uts_network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  minio_data:
